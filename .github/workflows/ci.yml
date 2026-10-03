@@ -1,56 +1,42 @@
-name: Check page & auto-fix formatting
+name: CI
 
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch: {}
 
 permissions:
-  contents: write
+  contents: read
   issues: write
 
 jobs:
-  check-and-autofix:
+  test:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      # --- Real check: does the page's <script> have a syntax error? ---
-      # This step FAILS the build (visible in the Actions tab) if there's a
-      # genuine JavaScript bug — it does not pretend to auto-fix logic bugs,
-      # because no tool can safely guess the correct fix for those. It flags
-      # them clearly instead (see the auto-issue step below), so you know to
-      # open a fresh Claude chat with the exact error to get it fixed.
-      - name: Extract and syntax-check the inline script
-        id: syncheck
-        run: |
-          node -e "
-            const fs = require('fs');
-            const html = fs.readFileSync('index.html', 'utf8');
-            const m = html.match(/<script>([\s\S]*)<\/script>/);
-            if (!m) { console.error('No <script> block found in index.html'); process.exit(1); }
-            fs.writeFileSync('/tmp/page.js', m[1]);
-          "
-          node --check /tmp/page.js
-          echo "✓ index.html JavaScript has no syntax errors"
+      - name: Install test tools (jsdom is only used by the tests)
+        run: npm i --no-save --no-audit --no-fund jsdom
 
-      # --- Auto-detect + auto-report a real, unfixable-by-machine error ---
-      # Opens (or reuses) one GitHub issue with the exact error, so a broken
-      # push never sits silently broken. Closes that issue automatically once
-      # a later push is clean again.
-      - name: Open an issue if the syntax check failed
-        if: failure() && steps.syncheck.outcome == 'failure'
+      # Runs: serverless backend tests, maintenance-script tests, and the dashboard in a simulated browser.
+      # A broken push is caught here BEFORE anyone depends on it.
+      - name: Run all tests
+        run: node tests/run.js
+
+      # Auto-report: a failing push opens (or updates) ONE issue with the run link ...
+      - name: Open an issue if the tests failed
+        if: failure() && github.event_name == 'push'
         uses: actions/github-script@v7
         with:
           script: |
-            const title = "🔴 index.html has a JavaScript syntax error";
-            const body = `The last push broke \`index.html\`.\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\nCommit: ${context.sha}\n\nOpen a fresh Claude chat, paste this issue link, and ask it to fix index.html.`;
+            const title = "🔴 Tests are failing on main";
+            const body = `The latest push broke the tests.\n\nRun: ${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}\nCommit: ${context.sha}\n\nTo get it fixed: open a fresh Claude chat, paste this issue link and ask it to fix the failing test.`;
             const open = await github.rest.issues.listForRepo({owner: context.repo.owner, repo: context.repo.repo, state: "open", labels: "auto-check"});
             const existing = open.data.find(i => i.title === title);
             if (existing) {
@@ -59,8 +45,9 @@ jobs:
               await github.rest.issues.create({owner: context.repo.owner, repo: context.repo.repo, title, body, labels: ["auto-check"]});
             }
 
-      - name: Close the auto-check issue once things are clean again
-        if: success()
+      # ... and closes it by itself once a later push is green again.
+      - name: Close the issue once tests are green again
+        if: success() && github.event_name == 'push'
         uses: actions/github-script@v7
         with:
           script: |
@@ -69,20 +56,3 @@ jobs:
               await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number, body: `Fixed as of ${context.sha}.`});
               await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issue.number, state: "closed"});
             }
-
-      # --- Real auto-fix: formatting only (safe, deterministic, reversible) ---
-      - name: Auto-format with Prettier
-        run: npx --yes prettier@3 --write index.html
-
-      - name: Commit formatting fix if anything changed
-        run: |
-          if ! git diff --quiet; then
-            git config user.name "auto-fix-bot"
-            git config user.email "actions@users.noreply.github.com"
-            git add index.html
-            git commit -m "auto-fix: format index.html [skip ci]"
-            git push
-            echo "✓ Auto-committed a formatting fix"
-          else
-            echo "✓ Nothing to auto-fix — already formatted"
-          fi

@@ -1,0 +1,7 @@
+.DS_Store
+node_modules/
+report.md
+test-output.txt
+links-output.txt
+trends.md
+.env
