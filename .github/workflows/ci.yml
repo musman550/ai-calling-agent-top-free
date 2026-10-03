@@ -32,7 +32,7 @@ jobs:
       # Auto-report: a failing push opens (or updates) ONE issue with the run link ...
       - name: Open an issue if the tests failed
         if: failure() && github.event_name == 'push'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const title = "🔴 Tests are failing on main";
@@ -48,7 +48,7 @@ jobs:
       # ... and closes it by itself once a later push is green again.
       - name: Close the issue once tests are green again
         if: success() && github.event_name == 'push'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           script: |
             const open = await github.rest.issues.listForRepo({owner: context.repo.owner, repo: context.repo.repo, state: "open", labels: "auto-check"});
