@@ -59,3 +59,15 @@ unreviewed can break your live site. To apply a suggestion or fix a failing test
 
 ## License
 MIT — free to use, modify and redistribute.
+
+<!-- BRANDING:START -->
+
+---
+
+🌐 Website: [musfiraai.com](https://musfiraai.com/)
+
+* ▶️ YouTube: [Automate With Musfira AI](https://www.youtube.com/@automatewithmusfiraai)
+* 💼 LinkedIn: [Musfira AI](https://www.linkedin.com/in/musfira-ai-b3218b39b)
+* 📸 Instagram: [@musma_n55](https://instagram.com/musma_n55)
+
+<!-- BRANDING:END -->
